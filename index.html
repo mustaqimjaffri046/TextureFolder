@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Floor Material Setup</title>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root {
     --bg: #1e1e1e;
@@ -394,34 +393,28 @@
 <body>
 
 <h1>Floor Material Setup</h1>
-<p class="subtitle">Define textures and sizes, then export JSON for Unity or GitHub.</p>
+<p class="subtitle">Define textures and sizes, then save to Google Drive.</p>
 
 <div class="toolbar">
   <label><input type="checkbox" id="isFloor" checked> Is Floor</label>
   <span style="flex:1"></span>
-  <span id="authStatus" style="font-size:11px;color:#888;"></span>
-  <button class="btn btn-sm" id="authBtn" onclick="handleAuth()">Sign in with Google</button>
-  <button class="btn btn-sm" onclick="toggleSettings()">&#9881;</button>
+  <button class="btn btn-sm" onclick="toggleSettings()">&#9881; Apps Script URL</button>
 </div>
 
 <!-- Settings Panel -->
 <div class="section" id="settingsPanel" style="display:none;">
   <div class="section-body">
     <p style="font-size:12px;color:#888;margin-bottom:8px;">
-      Create a <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--accent)">Google Cloud OAuth client</a>
-      (Web Application type). Enable <b>Google Drive API</b> and <b>Google Docs API</b>.
-      Add this page's address to Authorized JavaScript Origins.
+      Deploy <code>Code.js</code> as a Google Apps Script web app (Anyone can access), then paste the URL below.
     </p>
     <div style="display:flex;gap:8px;align-items:center;">
-      <label style="font-size:12px;white-space:nowrap;">Client ID:</label>
-      <input type="text" id="clientIdInput" style="flex:1;padding:4px 8px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:3px;font-size:12px;"
-             placeholder="xxxx.apps.googleusercontent.com">
+      <label style="font-size:12px;white-space:nowrap;">Web App URL:</label>
+      <input type="text" id="appsScriptUrl" style="flex:1;padding:4px 8px;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:3px;font-size:12px;"
+             placeholder="https://script.google.com/macros/s/xxxx/exec">
       <button class="btn btn-sm" onclick="saveSettings()">Save</button>
     </div>
-    <p style="font-size:11px;color:#666;margin-top:6px;">
-      Drive Folder ID: <code>1hXJn3iztH2h7ut0S4rqxGCT2xp4RO6ES</code> &nbsp;|&nbsp;
-      Doc ID: <code>1a_LBsFKrQ85H4vBpGaediOrMXNnKGH6be6bpE7sfqXE</code>
-    </p>
+  </div>
+</div>
   </div>
 </div>
 
@@ -500,101 +493,51 @@
 
 <script>
 // ─── Config ────────────────────────────────────
-const DRIVE_FOLDER_ID = '1hXJn3iztH2h7ut0S4rqxGCT2xp4RO6ES';
-const DOC_ID = '1a_LBsFKrQ85H4vBpGaediOrMXNnKGH6be6bpE7sfqXE';
-const SCOPES = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents';
-
 const state = {
   textures: [],
   sizes: [],
   isFloor: true
 };
 
-let accessToken = null;
-let tokenClient = null;
+function getScriptUrl() {
+  return localStorage.getItem('apps_script_url') || '';
+}
 
 document.getElementById('isFloor').addEventListener('change', e => {
   state.isFloor = e.target.checked;
 });
 
 // ─── Settings ──────────────────────────────────
-function getClientId() {
-  return localStorage.getItem('gdrive_client_id') || '';
-}
-
 function saveSettings() {
-  const id = document.getElementById('clientIdInput').value.trim();
-  if (!id) { alert('Enter a Client ID.'); return; }
-  localStorage.setItem('gdrive_client_id', id);
-  initTokenClient();
-  showToast('Client ID saved');
+  const url = document.getElementById('appsScriptUrl').value.trim();
+  if (!url) { alert('Enter the Apps Script web app URL.'); return; }
+  localStorage.setItem('apps_script_url', url);
+  showToast('URL saved');
 }
 
 function toggleSettings() {
   const panel = document.getElementById('settingsPanel');
   panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-  document.getElementById('clientIdInput').value = getClientId();
+  document.getElementById('appsScriptUrl').value = getScriptUrl();
 }
 
-// ─── Google Auth ───────────────────────────────
-function initTokenClient() {
-  const clientId = getClientId();
-  if (!clientId) return;
-  tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: clientId,
-    scope: SCOPES,
-    callback: (resp) => {
-      if (resp.error) { showToast('Auth failed: ' + resp.error); return; }
-      accessToken = resp.access_token;
-      updateAuthUI(true);
-      showToast('Signed in');
-    }
+// ─── Apps Script API call ──────────────────────
+async function callAppsScript(payload) {
+  const url = getScriptUrl();
+  if (!url) { toggleSettings(); throw new Error('Set the Apps Script URL first (click \u2699).'); }
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(payload),
+    redirect: 'follow'
   });
-}
 
-function handleAuth() {
-  if (accessToken) {
-    accessToken = null;
-    updateAuthUI(false);
-    showToast('Signed out');
-    return;
-  }
-  if (!getClientId()) { toggleSettings(); return; }
-  if (!tokenClient) initTokenClient();
-  tokenClient.requestAccessToken();
-}
-
-function updateAuthUI(signedIn) {
-  const btn = document.getElementById('authBtn');
-  const status = document.getElementById('authStatus');
-  if (signedIn) {
-    btn.textContent = 'Sign Out';
-    status.textContent = 'Signed in';
-    status.style.color = '#4caf50';
-  } else {
-    btn.textContent = 'Sign in with Google';
-    status.textContent = '';
-  }
-}
-
-// ─── Google API helpers ────────────────────────
-async function gapi(method, url, body, contentType) {
-  const opts = {
-    method,
-    headers: { Authorization: 'Bearer ' + accessToken }
-  };
-  if (body !== undefined) {
-    opts.body = body;
-    if (contentType) opts.headers['Content-Type'] = contentType;
-  }
-  const res = await fetch(url, opts);
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`API ${res.status}: ${txt}`);
-  }
   const text = await res.text();
-  return text ? JSON.parse(text) : {};
+  if (!text) return { success: true };
+  return JSON.parse(text);
 }
+
 
 // ─── Section Toggle ────────────────────────────
 function toggleSection(name) {
@@ -815,18 +758,12 @@ function preview() {
   alert(msg);
 }
 
-// ─── Google Drive Save ─────────────────────────
-function dataUrlToBlob(dataUrl) {
-  const parts = dataUrl.split(',');
-  const mime = parts[0].match(/:(.*?);/)[1];
-  const raw = atob(parts[1]);
-  const arr = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-  return new Blob([arr], { type: mime });
+// ─── Google Save (via Apps Script) ─────────────
+function dataUrlToBase64(dataUrl) {
+  return dataUrl.split(',')[1];
 }
 
 async function saveToGoogle() {
-  if (!accessToken) { handleAuth(); return; }
   if (state.textures.length === 0 && state.sizes.length === 0) {
     alert('Nothing to save.'); return;
   }
@@ -834,11 +771,12 @@ async function saveToGoogle() {
   const saveBtn = document.getElementById('saveBtn');
   const hint = document.getElementById('saveHint');
   saveBtn.disabled = true;
-  hint.textContent = 'Uploading textures...';
 
   try {
-    // 1) Upload each texture to the Drive folder
+    // 1) Upload each texture to Drive via Apps Script
+    hint.textContent = 'Uploading textures...';
     const uploaded = [];
+
     for (let i = 0; i < state.textures.length; i++) {
       const tex = state.textures[i];
       hint.textContent = `Uploading ${i + 1}/${state.textures.length}: ${tex.fileName}`;
@@ -850,82 +788,28 @@ async function saveToGoogle() {
 
       const ext = (tex.fileName || 'tex.png').split('.').pop() || 'png';
       const safeName = tex.name.replace(/[<>:"/\\|?*]/g, '_') + '.' + ext;
-      const blob = dataUrlToBlob(tex.dataUrl);
+      const base64 = dataUrlToBase64(tex.dataUrl);
+      const mime = tex.dataUrl.split(';')[0].split(':')[1] || 'image/png';
 
-      // Check if file with same name exists in folder — update it
-      let existingFileId = '';
-      try {
-        const q = encodeURIComponent(`name='${safeName.replace(/'/g, "\\'")}' and '${DRIVE_FOLDER_ID}' in parents and trashed=false`);
-        const search = await gapi('GET', `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`);
-        if (search.files && search.files.length > 0) existingFileId = search.files[0].id;
-      } catch (_) {}
+      const res = await callAppsScript({
+        action: 'uploadTexture',
+        fileName: safeName,
+        mimeType: mime,
+        base64Data: base64
+      });
 
-      if (existingFileId) {
-        // Update existing file
-        await gapi('PATCH',
-          `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=multipart`,
-          undefined);
-        // Upload new content via multipart
-        const meta = JSON.stringify({ name: safeName });
-        const boundary = '----FloorMat' + Date.now();
-        const parts2 = [
-          `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n`,
-          `--${boundary}\r\nContent-Type: ${blob.type}\r\n\r\n`
-        ];
-        const tail = `\r\n--${boundary}--`;
-        const arrayBuf = await blob.arrayBuffer();
-        const binPart = new Uint8Array(arrayBuf);
-
-        const fullBody = new Blob([
-          new TextEncoder().encode(parts2.join('')),
-          binPart,
-          new TextEncoder().encode(tail)
-        ], { type: `multipart/related; boundary=${boundary}` });
-
-        const res = await fetch(
-          `https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=multipart`,
-          {
-            method: 'PATCH',
-            headers: { Authorization: 'Bearer ' + accessToken },
-            body: fullBody
-          }
-        );
-        if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-        uploaded.push({ name: tex.name, fileName: safeName, fileId: existingFileId, link: `https://drive.google.com/uc?id=${existingFileId}` });
-      } else {
-        // Create new file
-        const meta = JSON.stringify({ name: safeName, parents: [DRIVE_FOLDER_ID] });
-        const boundary = '----FloorMat' + Date.now();
-        const parts2 = [
-          `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n`,
-          `--${boundary}\r\nContent-Type: ${blob.type}\r\n\r\n`
-        ];
-        const tail = `\r\n--${boundary}--`;
-        const arrayBuf = await blob.arrayBuffer();
-        const binPart = new Uint8Array(arrayBuf);
-
-        const fullBody = new Blob([
-          new TextEncoder().encode(parts2.join('')),
-          binPart,
-          new TextEncoder().encode(tail)
-        ], { type: `multipart/related; boundary=${boundary}` });
-
-        const res = await fetch(
-          'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
-          {
-            method: 'POST',
-            headers: { Authorization: 'Bearer ' + accessToken },
-            body: fullBody
-          }
-        );
-        if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-        const file = await res.json();
-        uploaded.push({ name: tex.name, fileName: safeName, fileId: file.id, link: `https://drive.google.com/uc?id=${file.id}` });
-      }
+      uploaded.push({
+        name: tex.name,
+        fileName: safeName,
+        fileId: res.fileId || '',
+        link: res.link || ''
+      });
     }
 
-    // 2) Build config JSON
+    // 2) Save config to Doc via Apps Script
+    hint.textContent = 'Saving config to Doc...';
     ensureFlags();
+
     const config = {
       exportDate: new Date().toISOString(),
       version: 1,
@@ -939,38 +823,12 @@ async function saveToGoogle() {
       }))
     };
 
-    // 3) Write config to Google Doc (clear + insert)
-    hint.textContent = 'Writing to Google Doc...';
+    await callAppsScript({ action: 'save', config: config });
 
-    // First, clear existing content
-    const docBody = await gapi('GET', `https://docs.googleapis.com/v1/documents/${DOC_ID}`);
-    const requests = [];
-    if (docBody.body && docBody.body.content) {
-      let totalChars = 0;
-      for (const el of docBody.body.content) {
-        if (el.elementIndex !== undefined && el.endIndex !== undefined) {
-          totalChars = Math.max(totalChars, el.endIndex);
-        }
-      }
-      if (totalChars > 1) {
-        requests.push({ deleteContentRange: { range: { startIndex: 1, endIndex: totalChars - 1 } } });
-      }
-    }
-    requests.push({
-      insertText: {
-        location: { index: 1 },
-        text: JSON.stringify(config, null, 2)
-      }
-    });
-
-    await gapi('POST', `https://docs.googleapis.com/v1/documents/${DOC_ID}:batchUpdate`, {
-      requests
-    });
-
-    hint.textContent = `Done — ${uploaded.length} texture(s) uploaded, config saved to Doc.`;
+    hint.textContent = `Done \u2014 ${uploaded.length} texture(s) uploaded, config saved.`;
     document.getElementById('exportArea').value = JSON.stringify(config, null, 2);
     document.getElementById('export-body').classList.remove('hidden');
-    showToast('Saved to Google Drive + Doc');
+    showToast('Saved to Google');
   } catch (err) {
     alert('Save failed:\n' + err.message);
     hint.textContent = 'Error: ' + err.message;
@@ -979,65 +837,34 @@ async function saveToGoogle() {
   }
 }
 
-// ─── Google Drive Load ─────────────────────────
+// ─── Google Load (via Apps Script) ─────────────
 async function loadFromGoogle() {
-  if (!accessToken) { handleAuth(); return; }
-
   const loadBtn = document.getElementById('loadBtn');
   const hint = document.getElementById('saveHint');
   loadBtn.disabled = true;
-  hint.textContent = 'Reading config from Doc...';
+  hint.textContent = 'Loading from Google...';
 
   try {
-    // 1) Read doc content
-    const docBody = await gapi('GET', `https://docs.googleapis.com/v1/documents/${DOC_ID}`);
-    let fullText = '';
-    if (docBody.body && docBody.body.content) {
-      for (const el of docBody.body.content) {
-        if (el.paragraph) {
-          for (const seg of el.paragraph.elements || []) {
-            fullText += seg.textRun ? seg.textRun.content : '';
-          }
-        }
-      }
+    // 1) Get config from Doc
+    const res = await callAppsScript({ action: 'load' });
+
+    if (!res.success || !res.config) {
+      alert(res.message || res.error || 'Doc is empty or unreadable.');
+      hint.textContent = 'No data found.';
+      return;
     }
 
-    fullText = fullText.trim();
-    if (!fullText) { alert('Doc is empty.'); return; }
-    const config = JSON.parse(fullText);
+    const config = res.config;
 
-    // 2) Restore state
+    // 2) Restore state (textures have Drive links, thumbnails will show via link)
     state.isFloor = config.isFloor !== undefined ? config.isFloor : true;
     document.getElementById('isFloor').checked = state.isFloor;
 
-    // 3) Download textures from Drive
-    hint.textContent = 'Downloading textures from Drive...';
-    state.textures = [];
-    const texEntries = config.textures || [];
-
-    for (let i = 0; i < texEntries.length; i++) {
-      const entry = texEntries[i];
-      hint.textContent = `Downloading ${i + 1}/${texEntries.length}: ${entry.fileName}`;
-      let dataUrl = '';
-
-      if (entry.fileId) {
-        try {
-          const res = await fetch(`https://www.googleapis.com/drive/v3/files/${entry.fileId}?alt=media`, {
-            headers: { Authorization: 'Bearer ' + accessToken }
-          });
-          if (res.ok) {
-            const blob = await res.blob();
-            dataUrl = await blobToDataUrl(blob);
-          }
-        } catch (_) {}
-      }
-
-      state.textures.push({
-        name: entry.name || 'Unnamed',
-        fileName: entry.fileName || 'unknown',
-        dataUrl: dataUrl
-      });
-    }
+    state.textures = (config.textures || []).map(t => ({
+      name: t.name || 'Unnamed',
+      fileName: t.fileName || 'unknown',
+      dataUrl: t.link ? t.link : ''
+    }));
 
     state.sizes = (config.sizes || []).map(s => ({
       sizeName: s.sizeName || '1.0 x 1.0',
@@ -1062,14 +889,6 @@ async function loadFromGoogle() {
   } finally {
     loadBtn.disabled = false;
   }
-}
-
-function blobToDataUrl(blob) {
-  return new Promise(resolve => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.readAsDataURL(blob);
-  });
 }
 
 // ─── Local Save fallback ───────────────────────
@@ -1131,7 +950,6 @@ function escHtml(s) {
 renderTextures();
 renderSizes();
 renderMatrix();
-if (getClientId()) initTokenClient();
 </script>
 </body>
 </html>
