@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Floor Material Setup</title>
+<style>
+  :root {
+    --bg: #1e1e1e;
+    --panel: #252526;
+    --border: #3e3e42;
+    --text: #cccccc;
+    --text-bright: #e0e0e0;
+    --accent: #0078d4;
+    --accent-hover: #1a8ae8;
+    --danger: #e74c3c;
+    --row-hover: #2a2d2e;
+    --header-bg: #333336;
+    --input-bg: #3c3c3c;
+    --toggle-on: #0078d4;
+    --toggle-off: #555;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 20px;
+    min-height: 100vh;
+  }
+
+  h1 {
+    font-size: 18px;
+    color: var(--text-bright);
+    margin-bottom: 6px;
+  }
+
+  .subtitle {
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 16px;
+  }
+
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+
+  .toolbar label {
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+
+  .toolbar input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 16px;
+    height: 16px;
+  }
+
+  .section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 12px;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    cursor: pointer;
+    user-select: none;
+    background: var(--header-bg);
+    border-radius: 4px 4px 0 0;
+  }
+
+  .section-header h2 {
+    font-size: 13px;
+    color: var(--text-bright);
+  }
+
+  .section-header .arrow {
+    font-size: 10px;
+    transition: transform 0.2s;
+  }
+
+  .section-header.collapsed .arrow {
+    transform: rotate(-90deg);
+  }
+
+  .section-body {
+    padding: 12px;
+  }
+
+  .section-body.hidden {
+    display: none;
+  }
+
+  .btn {
+    padding: 5px 12px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+    color: var(--text);
+    border-radius: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .btn:hover {
+    background: #4a4a4a;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .btn-primary:hover {
+    background: var(--accent-hover);
+  }
+
+  .btn-danger {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
+  .btn-danger:hover {
+    background: var(--danger);
+    color: #fff;
+  }
+
+  .btn-sm {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+
+  .texture-list, .size-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .texture-row, .size-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--input-bg);
+    border-radius: 3px;
+  }
+
+  .texture-row:hover, .size-row:hover {
+    background: var(--row-hover);
+  }
+
+  .texture-preview {
+    width: 40px;
+    height: 40px;
+    border-radius: 3px;
+    object-fit: cover;
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .texture-name {
+    flex: 1;
+    padding: 4px 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 3px;
+    font-size: 12px;
+  }
+
+  .texture-name:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .size-row input[type="text"],
+  .size-row input[type="number"] {
+    padding: 4px 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 3px;
+    font-size: 12px;
+  }
+
+  .size-row input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .size-row input[type="text"] {
+    width: 100px;
+  }
+
+  .tiling-inputs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .tiling-inputs input[type="number"] {
+    width: 60px;
+    text-align: center;
+  }
+
+  .tiling-label {
+    font-size: 11px;
+    color: #888;
+  }
+
+  /* Matrix */
+  .matrix-container {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 500px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+  }
+
+  .matrix-table {
+    border-collapse: collapse;
+    min-width: max-content;
+  }
+
+  .matrix-table th,
+  .matrix-table td {
+    padding: 4px;
+    text-align: center;
+    border: 1px solid var(--border);
+    min-width: 64px;
+  }
+
+  .matrix-table th {
+    background: var(--header-bg);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .matrix-table th:first-child,
+  .matrix-table td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--panel);
+    text-align: left;
+    min-width: 160px;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .matrix-table th:first-child {
+    z-index: 3;
+    background: var(--header-bg);
+  }
+
+  .matrix-table tr:hover td {
+    background: var(--row-hover);
+  }
+
+  .matrix-table tr:hover td:first-child {
+    background: var(--row-hover);
+  }
+
+  .matrix-check {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .matrix-tex-preview {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 2px;
+    display: block;
+    margin: 0 auto;
+  }
+
+  .matrix-tex-label {
+    font-size: 10px;
+    color: #888;
+    margin-top: 2px;
+    max-width: 60px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 6px;
+    padding: 28px;
+    text-align: center;
+    color: #888;
+    font-size: 13px;
+    transition: all 0.2s;
+    cursor: pointer;
+    margin-bottom: 10px;
+  }
+
+  .drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(0,120,212,0.08);
+    color: var(--accent);
+  }
+
+  .drop-zone input {
+    display: none;
+  }
+
+  .actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+
+  .hint {
+    font-size: 11px;
+    color: #888;
+    margin-top: 6px;
+  }
+
+  .export-area {
+    width: 100%;
+    min-height: 200px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 12px;
+    padding: 10px;
+    border-radius: 3px;
+    resize: vertical;
+    margin-top: 8px;
+  }
+
+  .import-area {
+    margin-top: 8px;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--accent);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 4px;
+    font-size: 13px;
+    z-index: 100;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s;
+    pointer-events: none;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .empty-msg {
+    text-align: center;
+    color: #666;
+    font-size: 12px;
+    padding: 16px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Floor Material Setup</h1>
+<p class="subtitle">Define textures and sizes, then export JSON for Unity or GitHub.</p>
+
+<div class="toolbar">
+  <label><input type="checkbox" id="isFloor" checked> Is Floor</label>
+</div>
+
+<!-- Textures Section -->
+<div class="section">
+  <div class="section-header" onclick="toggleSection('textures')">
+    <h2>Textures</h2>
+    <span class="arrow" id="textures-arrow">&#9660;</span>
+  </div>
+  <div class="section-body" id="textures-body">
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <input type="file" id="fileInput" multiple accept="image/*">
+      Drop texture images here, or click to browse
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <button class="btn btn-sm" onclick="autoNumber()">Auto Number</button>
+      <button class="btn btn-sm btn-danger" onclick="clearTextures()">Clear All</button>
+    </div>
+    <div class="texture-list" id="textureList">
+      <div class="empty-msg">No textures added yet.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Sizes Section -->
+<div class="section">
+  <div class="section-header" onclick="toggleSection('sizes')">
+    <h2>Sizes</h2>
+    <span class="arrow" id="sizes-arrow">&#9660;</span>
+  </div>
+  <div class="section-body" id="sizes-body">
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <button class="btn btn-sm" onclick="addSize()">+ Add Size</button>
+      <button class="btn btn-sm" onclick="autoAssignByShape()">Auto Assign by Shape</button>
+      <button class="btn btn-sm btn-danger" onclick="clearSizes()">Clear All</button>
+    </div>
+    <div class="size-list" id="sizeList">
+      <div class="empty-msg">No sizes defined yet.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Matrix Section -->
+<div class="section">
+  <div class="section-header" onclick="toggleSection('matrix')">
+    <h2>Matrix</h2>
+    <span class="arrow" id="matrix-arrow">&#9660;</span>
+  </div>
+  <div class="section-body" id="matrix-body">
+    <div id="matrixContainer" class="matrix-container">
+      <div class="empty-msg">Add textures and sizes to see the matrix.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Actions -->
+<div class="actions">
+  <button class="btn btn-primary" onclick="preview()">Preview</button>
+  <button class="btn btn-primary" onclick="saveJSON()" style="font-size:14px;padding:7px 20px;">Save</button>
+  <button class="btn" onclick="loadJSON()">Load</button>
+  <button class="btn" onclick="exportJSON()">Export (metadata only)</button>
+</div>
+
+<div class="section" style="margin-top:16px;">
+  <div class="section-header" onclick="toggleSection('export')">
+    <h2>Saved Data Preview</h2>
+    <span class="arrow" id="export-arrow">&#9660;</span>
+  </div>
+  <div class="section-body hidden" id="export-body">
+    <textarea class="export-area" id="exportArea" readonly></textarea>
+    <p class="hint">This is your saved JSON. Upload <code>furniture_materials.json</code> to your repo to track all changes.</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const state = {
+  textures: [],
+  sizes: [],
+  isFloor: true
+};
+
+document.getElementById('isFloor').addEventListener('change', e => {
+  state.isFloor = e.target.checked;
+});
+
+// ─── Section Toggle ────────────────────────────
+function toggleSection(name) {
+  const body = document.getElementById(name + '-body');
+  const arrow = document.getElementById(name + '-arrow');
+  body.classList.toggle('hidden');
+  arrow.parentElement.classList.toggle('collapsed');
+}
+
+// ─── Toast ─────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ─── Textures ──────────────────────────────────
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('dragover');
+});
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  addFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e => {
+  addFiles(e.target.files);
+  fileInput.value = '';
+});
+
+function addFiles(fileList) {
+  for (const file of fileList) {
+    if (!file.type.startsWith('image/')) continue;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      state.textures.push({
+        name: file.name.replace(/\.[^.]+$/, ''),
+        fileName: file.name,
+        dataUrl: ev.target.result
+      });
+      renderTextures();
+      renderMatrix();
+    };
+    reader.readAsDataURL(file);
+  }
+  showToast(`Added ${fileList.length} texture(s)`);
+}
+
+function renderTextures() {
+  const list = document.getElementById('textureList');
+  if (state.textures.length === 0) {
+    list.innerHTML = '<div class="empty-msg">No textures added yet.</div>';
+    return;
+  }
+  list.innerHTML = state.textures.map((tex, i) => `
+    <div class="texture-row">
+      <img class="texture-preview" src="${tex.dataUrl}" alt="${tex.name}">
+      <input class="texture-name" value="${escHtml(tex.name)}"
+             onchange="state.textures[${i}].name=this.value; renderMatrix()">
+      <span style="font-size:11px;color:#888;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(tex.fileName)}">${escHtml(tex.fileName)}</span>
+      <button class="btn btn-sm btn-danger" onclick="removeTexture(${i})">X</button>
+    </div>
+  `).join('');
+}
+
+function removeTexture(i) {
+  state.textures.splice(i, 1);
+  renderTextures();
+  renderMatrix();
+}
+
+function clearTextures() {
+  state.textures = [];
+  renderTextures();
+  renderMatrix();
+}
+
+function autoNumber() {
+  state.textures.forEach((t, i) => t.name = String(i + 1));
+  renderTextures();
+  renderMatrix();
+}
+
+// ─── Sizes ─────────────────────────────────────
+function addSize() {
+  state.sizes.push({
+    sizeName: '1.0 x 1.0',
+    tilingX: 1.0,
+    tilingY: 1.0,
+    textureFlags: new Array(state.textures.length).fill(false)
+  });
+  renderSizes();
+  renderMatrix();
+}
+
+function renderSizes() {
+  const list = document.getElementById('sizeList');
+  if (state.sizes.length === 0) {
+    list.innerHTML = '<div class="empty-msg">No sizes defined yet.</div>';
+    return;
+  }
+  list.innerHTML = state.sizes.map((s, i) => `
+    <div class="size-row">
+      <input type="text" value="${escHtml(s.sizeName)}" placeholder="Name"
+             onchange="state.sizes[${i}].sizeName=this.value; renderMatrix()">
+      <span class="tiling-label">Tiling:</span>
+      <div class="tiling-inputs">
+        <input type="number" step="0.01" value="${s.tilingX}" min="0"
+               onchange="state.sizes[${i}].tilingX=parseFloat(this.value)||0">
+        <span class="tiling-label">x</span>
+        <input type="number" step="0.01" value="${s.tilingY}" min="0"
+               onchange="state.sizes[${i}].tilingY=parseFloat(this.value)||0">
+        <span class="tiling-label">m</span>
+      </div>
+      <button class="btn btn-sm btn-danger" onclick="removeSize(${i})">X</button>
+    </div>
+  `).join('');
+}
+
+function removeSize(i) {
+  state.sizes.splice(i, 1);
+  renderSizes();
+  renderMatrix();
+}
+
+function clearSizes() {
+  state.sizes = [];
+  renderSizes();
+  renderMatrix();
+}
+
+function autoAssignByShape() {
+  ensureFlags();
+  for (const s of state.sizes) {
+    const sizeIsSquare = Math.abs(s.tilingX - s.tilingY) < 0.001;
+    for (let t = 0; t < state.textures.length; t++) {
+      const tex = state.textures[t];
+      // Approximate square check by name heuristic or all textures are square-ish
+      // Since we don't have width/height easily from dataURL reliably,
+      // we load the image to check dimensions.
+      const img = new Image();
+      img.src = tex.dataUrl;
+      const idx = t;
+      img.onload = () => {
+        const texIsSquare = Math.abs(img.width - img.height) < 2;
+        s.textureFlags[idx] = (texIsSquare === sizeIsSquare);
+        renderMatrix();
+      };
+    }
+  }
+  renderMatrix();
+  showToast('Auto-assigned by shape');
+}
+
+// ─── Matrix ────────────────────────────────────
+function ensureFlags() {
+  for (const s of state.sizes) {
+    while (s.textureFlags.length < state.textures.length) {
+      s.textureFlags.push(false);
+    }
+  }
+}
+
+function renderMatrix() {
+  ensureFlags();
+  const container = document.getElementById('matrixContainer');
+
+  if (state.textures.length === 0 || state.sizes.length === 0) {
+    container.innerHTML = '<div class="empty-msg">Add textures and sizes to see the matrix.</div>';
+    return;
+  }
+
+  let html = '<table class="matrix-table"><thead><tr><th>Size / Tiling</th>';
+
+  for (const tex of state.textures) {
+    html += `<th>
+      <img class="matrix-tex-preview" src="${tex.dataUrl}" alt="${escHtml(tex.name)}">
+      <div class="matrix-tex-label" title="${escHtml(tex.name)}">${escHtml(tex.name)}</div>
+    </th>`;
+  }
+
+  html += '</tr></thead><tbody>';
+
+  for (let s = 0; s < state.sizes.length; s++) {
+    const size = state.sizes[s];
+    html += `<tr><td><strong>${escHtml(size.sizeName)}</strong><br><span style="font-size:11px;color:#888">Tiling: ${size.tilingX.toFixed(2)} x ${size.tilingY.toFixed(2)}</span></td>`;
+
+    for (let t = 0; t < state.textures.length; t++) {
+      const checked = size.textureFlags[t] ? 'checked' : '';
+      html += `<td><input type="checkbox" class="matrix-check" ${checked}
+                onchange="state.sizes[${s}].textureFlags[${t}]=this.checked"></td>`;
+    }
+
+    html += '</tr>';
+  }
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+// ─── Preview ───────────────────────────────────
+function preview() {
+  ensureFlags();
+  let msg = `Textures: ${state.textures.length}\nSizes: ${state.sizes.length}\n\n`;
+
+  for (const s of state.sizes) {
+    const assigned = s.textureFlags
+      .map((f, i) => f ? state.textures[i].name : null)
+      .filter(Boolean);
+    msg += `[${s.sizeName}] tiling=(${s.tilingX}, ${s.tilingY}) textures=${assigned.length}\n`;
+    for (const name of assigned) msg += `  - ${name}\n`;
+    msg += '\n';
+  }
+
+  alert(msg);
+}
+
+// ─── Save / Load (full data with textures) ─────
+let dirHandle = null; // cached directory handle
+
+async function getDirHandle() {
+  if (dirHandle) {
+    // Verify we still have permission
+    if ((await dirHandle.queryPermission({ mode: 'readwrite' })) === 'granted')
+      return dirHandle;
+  }
+  dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+  return dirHandle;
+}
+
+function buildSaveData(texturePaths) {
+  ensureFlags();
+  return {
+    exportDate: new Date().toISOString(),
+    version: 1,
+    isFloor: state.isFloor,
+    textures: state.textures.map((t, i) => ({
+      name: t.name,
+      fileName: t.fileName,
+      path: texturePaths ? texturePaths[i] : ''
+    })),
+    sizes: state.sizes.map(s => ({
+      sizeName: s.sizeName,
+      tiling: [s.tilingX, s.tilingY],
+      isFloor: state.isFloor,
+      textureFlags: s.textureFlags
+    }))
+  };
+}
+
+async function saveJSON() {
+  if (state.textures.length === 0 && state.sizes.length === 0) {
+    alert('Nothing to save. Add textures and sizes first.');
+    return;
+  }
+
+  try {
+    const root = await getDirHandle();
+
+    // Create Textures subfolder
+    const texDir = await root.getDirectoryHandle('Textures', { create: true });
+
+    showToast('Saving textures...');
+    const texturePaths = [];
+
+    // Save each texture image into Textures/
+    for (let i = 0; i < state.textures.length; i++) {
+      const tex = state.textures[i];
+      if (!tex.dataUrl) {
+        texturePaths.push('');
+        continue;
+      }
+
+      const ext = (tex.fileName || 'tex.png').split('.').pop() || 'png';
+      const safeName = tex.name.replace(/[<>:"/\\|?*]/g, '_');
+      const outName = safeName + '.' + ext;
+      const path = 'Textures/' + outName;
+
+      // Convert base64 dataURL to binary blob
+      const resp = await fetch(tex.dataUrl);
+      const blob = await resp.blob();
+
+      const fileHandle = await texDir.getFileHandle(outName, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+
+      texturePaths.push(path);
+    }
+
+    // Save JSON to root
+    const data = buildSaveData(texturePaths);
+    const json = JSON.stringify(data, null, 2);
+    const jsonBlob = new Blob([json], { type: 'application/json' });
+
+    const jsonHandle = await root.getFileHandle('furniture_materials.json', { create: true });
+    const jsonWritable = await jsonHandle.createWritable();
+    await jsonWritable.write(jsonBlob);
+    await jsonWritable.close();
+
+    // Update preview
+    document.getElementById('exportArea').value = json;
+    document.getElementById('export-body').classList.remove('hidden');
+
+    showToast('Saved: furniture_materials.json + Textures/');
+  } catch (err) {
+    if (err.name === 'AbortError') return; // user cancelled picker
+    alert('Save failed:\n' + err.message);
+  }
+}
+
+async function loadJSON() {
+  try {
+    // Try to open from same directory if we have a handle
+    let fileHandle;
+    if (dirHandle) {
+      try {
+        fileHandle = await dirHandle.getFileHandle('furniture_materials.json');
+      } catch (_) { /* file not found, fall through to picker */ }
+    }
+
+    if (!fileHandle) {
+      // First try: pick file directly
+      [fileHandle] = await window.showOpenFilePicker({
+        types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }]
+      });
+    }
+
+    const file = await fileHandle.getFile();
+    const text = await file.text();
+    const data = JSON.parse(text);
+
+    // If textures have relative paths, try to load images from Textures/ folder
+    if (data.textures && data.textures.some(t => t.path)) {
+      let texDir;
+      try {
+        if (dirHandle) {
+          texDir = await dirHandle.getDirectoryHandle('Textures');
+        }
+      } catch (_) { /* no Textures folder */ }
+
+      for (const tex of data.textures) {
+        tex.data = '';
+        if (tex.path && texDir) {
+          try {
+            const fileName = tex.path.split('/').pop();
+            const imgFile = await texDir.getFileHandle(fileName);
+            const imgBlob = await (await imgFile.getFile()).blob();
+            tex.data = await blobToDataUrl(imgBlob);
+          } catch (_) { /* image not found, leave empty */ }
+        }
+      }
+    }
+
+    restoreState(data);
+    showToast('Loaded: all textures restored');
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    alert('Load failed:\n' + err.message);
+  }
+}
+
+function blobToDataUrl(blob) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(blob);
+  });
+}
+
+function saveJSON() {
+  if (state.textures.length === 0 && state.sizes.length === 0) {
+    alert('Nothing to save. Add textures and sizes first.');
+    return;
+  }
+  const data = buildSaveData();
+  const json = JSON.stringify(data, null, 2);
+  document.getElementById('exportArea').value = json;
+  document.getElementById('export-body').classList.remove('hidden');
+
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'furniture_materials.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Saved furniture_materials.json');
+}
+
+function loadJSON() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        restoreState(data);
+        showToast('Loaded — all textures restored');
+      } catch (err) {
+        alert('Invalid JSON file:\n' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+function restoreState(data) {
+  state.isFloor = data.isFloor !== undefined ? data.isFloor : true;
+  document.getElementById('isFloor').checked = state.isFloor;
+
+  state.textures = (data.textures || []).map(t => ({
+    name: t.name || 'Unnamed',
+    fileName: t.fileName || 'unknown',
+    dataUrl: t.data || t.dataUrl || ''
+  }));
+
+  state.sizes = (data.sizes || []).map(s => ({
+    sizeName: s.sizeName || '1.0 x 1.0',
+    tilingX: Array.isArray(s.tiling) ? s.tiling[0] : 1,
+    tilingY: Array.isArray(s.tiling) ? s.tiling[1] : 1,
+    textureFlags: Array.isArray(s.textureFlags)
+      ? s.textureFlags
+      : new Array(state.textures.length).fill(false)
+  }));
+
+  renderTextures();
+  renderSizes();
+  renderMatrix();
+}
+
+// ─── Export (metadata only, no images) ─────────
+function exportJSON() {
+  ensureFlags();
+  const data = {
+    exportDate: new Date().toISOString(),
+    version: 1,
+    isFloor: state.isFloor,
+    textures: state.textures.map(t => ({ name: t.name, fileName: t.fileName })),
+    sizes: state.sizes.map(s => ({
+      sizeName: s.sizeName,
+      tiling: [s.tilingX, s.tilingY],
+      isFloor: state.isFloor,
+      textureFlags: s.textureFlags
+    }))
+  };
+  const json = JSON.stringify(data, null, 2);
+  document.getElementById('exportArea').value = json;
+  document.getElementById('export-body').classList.remove('hidden');
+  showToast('Exported metadata only (no images)');
+}
+
+// ─── Helpers ───────────────────────────────────
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+}
+
+// ─── Init ──────────────────────────────────────
+renderTextures();
+renderSizes();
+renderMatrix();
+</script>
+</body>
+</html>
