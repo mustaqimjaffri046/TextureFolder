@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Floor Material Setup</title>
+<title>Furniture Setup</title>
 <style>
   :root {
     --bg: #1e1e1e;
@@ -388,12 +388,93 @@
     opacity: 0.5;
     cursor: not-allowed;
   }
+
+  .model-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .model-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    background: var(--input-bg);
+    border-radius: 3px;
+  }
+
+  .model-row:hover {
+    background: var(--row-hover);
+  }
+
+  .model-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 3px;
+    background: var(--header-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .model-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .model-name {
+    font-size: 12px;
+    color: var(--text-bright);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .model-meta {
+    font-size: 11px;
+    color: #888;
+    margin-top: 2px;
+  }
+
+  .model-category select {
+    padding: 3px 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 3px;
+    font-size: 11px;
+  }
+
+  .model-category select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .progress-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.3s;
+    border-radius: 3px;
+  }
 </style>
 </head>
 <body>
 
-<h1>Floor Material Setup</h1>
-<p class="subtitle">Define textures and sizes, then save to Google Drive.</p>
+<h1>Furniture Setup</h1>
+<p class="subtitle">Textures, sizes, and catalog models. Save to Google Drive.</p>
 
 <div class="toolbar">
   <label><input type="checkbox" id="isFloor" checked> Is Floor</label>
@@ -470,6 +551,41 @@
   </div>
 </div>
 
+<!-- Catalog Models Section -->
+<div class="section">
+  <div class="section-header" onclick="toggleSection('models')">
+    <h2>Catalog Models</h2>
+    <span class="arrow" id="models-arrow">&#9660;</span>
+  </div>
+  <div class="section-body hidden" id="models-body">
+    <div class="drop-zone" id="modelDropZone" onclick="document.getElementById('modelFileInput').click()">
+      <input type="file" id="modelFileInput" multiple accept=".fbx,.obj,.glb,.gltf,.blend,.prefab,.3ds,.dae,.stl,model/*">
+      Drop 3D models here (FBX, GLB, OBJ, prefab), or click to browse
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+      <button class="btn btn-sm" id="browseFolderBtn">Browse Folder</button>
+      <input type="file" id="modelFolderInput" webkitdirectory directory multiple style="display:none;">
+      <button class="btn btn-sm" onclick="autoDetectAll()">Auto-detect Categories</button>
+      <button class="btn btn-sm" onclick="selectAllModels()">Select All</button>
+      <button class="btn btn-sm" onclick="deselectAllModels()">Deselect All</button>
+      <button class="btn btn-sm btn-danger" onclick="clearAllModels()">Clear All</button>
+    </div>
+    <div class="model-list" id="modelList">
+      <div class="empty-msg">No models added yet.</div>
+    </div>
+    <div class="progress-bar" id="modelProgressBar" style="display:none;">
+      <div class="progress-fill" id="modelProgressFill" style="width:0%"></div>
+    </div>
+    <p class="hint" id="modelStatusHint"></p>
+    <div style="margin-top:10px;">
+      <button class="btn btn-primary" id="uploadModelsBtn" onclick="uploadModelsToGoogle()">Upload Models to Google</button>
+      <button class="btn" id="loadModelsBtn" onclick="loadCatalogFromGoogle()">Load Catalog from Google</button>
+      <button class="btn" onclick="saveCatalogLocal()">Save Catalog JSON</button>
+      <button class="btn" onclick="previewCatalog()">Preview Catalog JSON</button>
+    </div>
+  </div>
+</div>
+
 <!-- Actions -->
 <div class="actions">
   <button class="btn btn-primary" onclick="preview()">Preview</button>
@@ -496,7 +612,19 @@
 const state = {
   textures: [],
   sizes: [],
-  isFloor: true
+  isFloor: true,
+  models: []
+};
+
+const CATEGORIES = [
+  'Sofa','Chair','Table','Bed','Lamp','Cabinet','Shelf',
+  'Desk','Ottoman','Bench','Mirror','Rug','Ceiling','Wall','Floor','Door','Window','Other'
+];
+
+const MODEL_EXT = {
+  '.fbx':'3D Model','.obj':'3D Model','.glb':'3D Model',
+  '.gltf':'3D Model','.blend':'3D Model','.3ds':'3D Model',
+  '.dae':'3D Model','.stl':'3D Model','.prefab':'Unity Prefab'
 };
 
 function getScriptUrl() {
@@ -806,7 +934,7 @@ async function saveToGoogle() {
       });
     }
 
-    // 2) Save config to Doc via Apps Script
+    // 2) Save texture config to Doc via Apps Script
     hint.textContent = 'Saving config to Doc...';
     ensureFlags();
 
@@ -845,7 +973,6 @@ async function loadFromGoogle() {
   hint.textContent = 'Loading from Google...';
 
   try {
-    // 1) Get config from Doc
     const res = await callAppsScript({ action: 'load' });
 
     if (!res.success || !res.config) {
@@ -856,7 +983,6 @@ async function loadFromGoogle() {
 
     const config = res.config;
 
-    // 2) Restore state (textures have Drive links, thumbnails will show via link)
     state.isFloor = config.isFloor !== undefined ? config.isFloor : true;
     document.getElementById('isFloor').checked = state.isFloor;
 
@@ -937,6 +1063,334 @@ function restoreState(data) {
   renderTextures();
   renderSizes();
   renderMatrix();
+}
+
+// ─── Catalog Models ─────────────────────────────
+const modelDropZone = document.getElementById('modelDropZone');
+const modelFileInput = document.getElementById('modelFileInput');
+
+modelDropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  modelDropZone.classList.add('dragover');
+});
+modelDropZone.addEventListener('dragleave', () => modelDropZone.classList.remove('dragover'));
+modelDropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  modelDropZone.classList.remove('dragover');
+  handleModelFiles(e.dataTransfer.files);
+});
+modelFileInput.addEventListener('change', e => {
+  handleModelFiles(e.target.files);
+  modelFileInput.value = '';
+});
+
+const modelFolderInput = document.getElementById('modelFolderInput');
+document.getElementById('browseFolderBtn').addEventListener('click', () => {
+  modelFolderInput.click();
+});
+modelFolderInput.addEventListener('change', e => {
+  handleModelFiles(e.target.files);
+  modelFolderInput.value = '';
+});
+
+function handleModelFiles(fileList) {
+  let added = 0;
+  console.log('[Models] Received', fileList.length, 'files');
+  for (const file of fileList) {
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    const path = file.webkitRelativePath || file.name;
+    console.log('[Models] Checking:', path, 'ext:', ext);
+    if (!MODEL_EXT[ext] && !file.name.endsWith('.prefab')) continue;
+
+    const category = detectCategory(file.name);
+    state.models.push({
+      name: file.name.replace(/\.[^.]+$/, ''),
+      fileName: file.name,
+      relativePath: path,
+      file: file,
+      category: category,
+      included: true,
+      uploading: false,
+      uploaded: false,
+      fileId: '',
+      link: ''
+    });
+    added++;
+  }
+  renderModels();
+  showToast(`Added ${added} model(s)`);
+}
+
+function detectCategory(name) {
+  const s = name.toLowerCase();
+  const rules = [
+    ['sofa bed','Bed'],['coffee table','Table'],['dining table','Table'],
+    ['side table','Table'],['nightstand','Cabinet'],['bookshelf','Shelf'],
+    ['bookcase','Shelf'],['floor lamp','Lamp'],['table lamp','Lamp'],
+    ['pendant','Lamp'],['chandelier','Lamp'],['sectional','Sofa'],
+    ['loveseat','Sofa'],['sofa','Sofa'],['couch','Sofa'],
+    ['recliner','Chair'],['armchair','Chair'],['chair','Chair'],
+    ['stool','Chair'],['table','Table'],['desk','Desk'],
+    ['bed','Bed'],['mattress','Bed'],['headboard','Bed'],
+    ['lamp','Lamp'],['sconce','Lamp'],['cabinet','Cabinet'],
+    ['credenza','Cabinet'],['dresser','Cabinet'],['wardrobe','Cabinet'],
+    ['shelf','Shelf'],['etagere','Shelf'],['ottoman','Ottoman'],
+    ['pouf','Ottoman'],['bench','Bench'],['mirror','Mirror'],
+    ['rug','Rug'],['carpet','Rug'],['ceiling','Ceiling'],
+    ['wall','Wall'],['floor','Floor'],['door','Door'],['window','Window']
+  ];
+  for (const [kw, cat] of rules) {
+    if (s.includes(kw)) return cat;
+  }
+  return 'Other';
+}
+
+function renderModels() {
+  const list = document.getElementById('modelList');
+  if (state.models.length === 0) {
+    list.innerHTML = '<div class="empty-msg">No models added yet.</div>';
+    return;
+  }
+
+  list.innerHTML = state.models.map((m, i) => {
+    const ext = '.' + m.fileName.split('.').pop().toLowerCase();
+    const icon = m.fileName.endsWith('.prefab') ? '&#9881;' : '&#9635;';
+    const sizeStr = m.file ? formatModelSize(m.file.size) : '';
+    const statusIcon = m.uploaded ? '&#10003;' : m.uploading ? '&#8987;' : '';
+    const catOptions = CATEGORIES.map(c =>
+      `<option value="${c}" ${c === m.category ? 'selected' : ''}>${c}</option>`
+    ).join('');
+
+    return `
+    <div class="model-row" style="opacity:${m.included ? 1 : 0.4}">
+      <input type="checkbox" ${m.included ? 'checked' : ''}
+             onchange="state.models[${i}].included=this.checked; renderModels()"
+             style="accent-color:var(--accent);width:16px;height:16px;">
+      <div class="model-icon">${icon}</div>
+      <div class="model-info">
+        <div class="model-name" title="${escHtml(m.relativePath || m.fileName)}">${escHtml(m.name)}</div>
+        <div class="model-meta">${escHtml(ext)} ${sizeStr} ${statusIcon}</div>
+      </div>
+      <div class="model-category">
+        <select onchange="state.models[${i}].category=this.value">${catOptions}</select>
+      </div>
+      <button class="btn btn-sm btn-danger" onclick="removeModel(${i})">X</button>
+    </div>`;
+  }).join('');
+}
+
+function formatModelSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function removeModel(i) { state.models.splice(i, 1); renderModels(); }
+function clearAllModels() { state.models = []; renderModels(); }
+function selectAllModels() { state.models.forEach(m => m.included = true); renderModels(); }
+function deselectAllModels() { state.models.forEach(m => m.included = false); renderModels(); }
+function autoDetectAll() {
+  state.models.forEach(m => m.category = detectCategory(m.fileName));
+  renderModels();
+  showToast('Categories re-detected');
+}
+
+function buildCatalogJson() {
+  const grouped = {};
+  for (const item of state.models) {
+    if (!item.included) continue;
+    const cat = item.category || 'Other';
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(item);
+  }
+
+  const rootNodes = [];
+  for (const [catName, items] of Object.entries(grouped)) {
+    const children = items.map(item => ({
+      nodeId: hashId(item.name),
+      displayLabel: item.name.replace(/[_-]/g, ' '),
+      kind: 1,
+      modelPrefabName: item.name,
+      driveFileId: item.fileId || '',
+      driveDownloadUrl: item.link || '',
+      resourcesLoadPath: '',
+      modelSpawnLocalPositionOffset: { x:0, y:0, z:0 },
+      modelSpawnLocalEulerOffset: { x:0, y:0, z:0 },
+      price: '',
+      company: '',
+      size: '',
+      shortDescription: '',
+      children: []
+    }));
+
+    rootNodes.push({
+      nodeId: hashId(catName),
+      displayLabel: catName,
+      panelTitle: catName,
+      kind: 0,
+      children: children
+    });
+  }
+
+  return {
+    exportDate: new Date().toISOString(),
+    version: 1,
+    rootPanelTitle: 'Furniture',
+    rootNodes: rootNodes
+  };
+}
+
+function hashId(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return 'W' + ((h >>> 0).toString(16)).padStart(7, '0').substring(0, 7);
+}
+
+async function uploadModelsToGoogle() {
+  const included = state.models.filter(m => m.included);
+  if (included.length === 0) { alert('No models to upload.'); return; }
+
+  const btn = document.getElementById('uploadModelsBtn');
+  const hint = document.getElementById('modelStatusHint');
+  const bar = document.getElementById('modelProgressBar');
+  const fill = document.getElementById('modelProgressFill');
+  btn.disabled = true;
+  bar.style.display = 'block';
+
+  try {
+    for (let i = 0; i < included.length; i++) {
+      const item = included[i];
+      const pct = ((i + 1) / included.length * 100).toFixed(0);
+      fill.style.width = pct + '%';
+      hint.textContent = `Uploading ${i + 1}/${included.length}: ${item.fileName}`;
+
+      item.uploading = true;
+      renderModels();
+
+      if (!item.file) {
+        item.uploaded = true;
+        item.uploading = false;
+        continue;
+      }
+
+      const base64 = await fileToBase64(item.file);
+      const ext = item.fileName.split('.').pop().toLowerCase();
+      const mimeMap = {
+        'fbx': 'application/octet-stream', 'obj': 'application/octet-stream',
+        'glb': 'model/gltf-binary', 'gltf': 'model/gltf+json',
+        'blend': 'application/octet-stream', 'prefab': 'application/octet-stream',
+        '3ds': 'application/octet-stream', 'dae': 'application/xml',
+        'stl': 'application/octet-stream'
+      };
+      const mime = mimeMap[ext] || 'application/octet-stream';
+
+      const res = await callAppsScript({
+        action: 'uploadModel',
+        fileName: item.fileName,
+        mimeType: mime,
+        base64Data: base64
+      });
+
+      if (res.success) {
+        item.fileId = res.fileId || '';
+        item.link = res.link || '';
+        item.uploaded = true;
+      } else {
+        hint.textContent = `Error uploading ${item.fileName}: ${res.error}`;
+      }
+      item.uploading = false;
+      renderModels();
+    }
+
+    hint.textContent = 'Saving catalog JSON to Doc...';
+    const catalogJson = buildCatalogJson();
+    await callAppsScript({ action: 'saveCatalog', config: catalogJson });
+
+    fill.style.width = '100%';
+    hint.textContent = `Done \u2014 ${included.length} model(s) uploaded, catalog saved.`;
+    document.getElementById('exportArea').value = JSON.stringify(catalogJson, null, 2);
+    document.getElementById('export-body').classList.remove('hidden');
+    showToast('Models uploaded to Google');
+  } catch (err) {
+    alert('Upload failed:\n' + err.message);
+    hint.textContent = 'Error: ' + err.message;
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { bar.style.display = 'none'; fill.style.width = '0%'; }, 1500);
+  }
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function loadCatalogFromGoogle() {
+  const btn = document.getElementById('loadModelsBtn');
+  const hint = document.getElementById('modelStatusHint');
+  btn.disabled = true;
+  hint.textContent = 'Loading catalog from Google...';
+
+  try {
+    const res = await callAppsScript({ action: 'loadCatalog' });
+    if (!res.success || !res.config) {
+      alert(res.message || res.error || 'No catalog data found.');
+      hint.textContent = 'No data found.';
+      return;
+    }
+
+    const config = res.config;
+    state.models = [];
+    for (const node of (config.rootNodes || [])) {
+      if (node.kind !== 0 || !node.children) continue;
+      for (const child of node.children) {
+        state.models.push({
+          name: child.displayLabel || child.modelPrefabName || 'Unknown',
+          fileName: (child.modelPrefabName || 'model') + '.fbx',
+          file: null,
+          category: node.displayLabel || 'Other',
+          included: true,
+          uploading: false,
+          uploaded: true,
+          fileId: child.driveFileId || '',
+          link: child.driveDownloadUrl || ''
+        });
+      }
+    }
+
+    renderModels();
+    hint.textContent = `Loaded ${state.models.length} model(s) from Google.`;
+    document.getElementById('exportArea').value = JSON.stringify(config, null, 2);
+    document.getElementById('export-body').classList.remove('hidden');
+    showToast('Catalog loaded from Google');
+  } catch (err) {
+    alert('Load failed:\n' + err.message);
+    hint.textContent = 'Error: ' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function previewCatalog() {
+  const json = buildCatalogJson();
+  document.getElementById('exportArea').value = JSON.stringify(json, null, 2);
+  document.getElementById('export-body').classList.remove('hidden');
+  showToast('Catalog JSON generated');
+}
+
+function saveCatalogLocal() {
+  if (state.models.length === 0) { alert('Nothing to save.'); return; }
+  const json = buildCatalogJson();
+  const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'catalog_hierarchy.json'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('Downloaded catalog_hierarchy.json');
 }
 
 // ─── Helpers ───────────────────────────────────
