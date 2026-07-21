@@ -141,6 +141,28 @@ function handleUploadModel(data) {
   });
 }
 
+function testDriveAccess() {
+  var folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+  Logger.log('Main folder: ' + folder.getName() + ' (ID: ' + folder.getId() + ')');
+
+  var folders = folder.getFoldersByName(MODELS_SUBFOLDER);
+  if (folders.hasNext()) {
+    var sub = folders.next();
+    Logger.log('CatalogModels subfolder exists (ID: ' + sub.getId() + ')');
+    var files = sub.getFiles();
+    var count = 0;
+    while (files.hasNext()) { files.next(); count++; }
+    Logger.log('CatalogModels has ' + count + ' file(s)');
+  } else {
+    Logger.log('CatalogModels subfolder does NOT exist (will be created on first upload)');
+  }
+
+  var texFiles = folder.getFiles();
+  var texCount = 0;
+  while (texFiles.hasNext()) { texFiles.next(); texCount++; }
+  Logger.log('Main Textures folder has ' + texCount + ' file(s)');
+}
+
 function jsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);

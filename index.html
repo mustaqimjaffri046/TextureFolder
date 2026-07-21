@@ -661,9 +661,18 @@ async function callAppsScript(payload) {
     redirect: 'follow'
   });
 
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`HTTP ${res.status}: ${errText || res.statusText}`);
+  }
+
   const text = await res.text();
-  if (!text) return { success: true };
-  return JSON.parse(text);
+  if (!text) return { success: true, message: 'Empty response from server' };
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error('Invalid JSON from server: ' + text.substring(0, 200));
+  }
 }
 
 
@@ -1112,6 +1121,7 @@ function handleModelFiles(fileList) {
       included: true,
       uploading: false,
       uploaded: false,
+      uploadError: '',
       fileId: '',
       link: ''
     });
@@ -1265,15 +1275,22 @@ async function uploadModelsToGoogle() {
       hint.textContent = `Uploading ${i + 1}/${included.length}: ${item.fileName}`;
 
       item.uploading = true;
+      item.uploadError = '';
       renderModels();
 
+      console.log(`[Upload] Model: ${item.fileName}, file object:`, item.file, `file type:`, typeof item.file, `file instanceof File:`, item.file instanceof File);
+
       if (!item.file) {
-        item.uploaded = true;
+        hint.textContent = `Skipping ${item.fileName} — no local file. Add the file first.`;
+        console.error(`[Upload] SKIPPED: ${item.fileName} has no file object. state.models:`, state.models);
         item.uploading = false;
+        renderModels();
         continue;
       }
 
+      console.log(`[Upload] Reading file: ${item.fileName}, size: ${item.file.size} bytes`);
       const base64 = await fileToBase64(item.file);
+      console.log(`[Upload] Base64 length: ${base64 ? base64.length : 'null'}`);
       const ext = item.fileName.split('.').pop().toLowerCase();
       const mimeMap = {
         'fbx': 'application/octet-stream', 'obj': 'application/octet-stream',
@@ -1284,22 +1301,31 @@ async function uploadModelsToGoogle() {
       };
       const mime = mimeMap[ext] || 'application/octet-stream';
 
+      console.log(`[Upload] Calling Apps Script for: ${item.fileName}`);
       const res = await callAppsScript({
         action: 'uploadModel',
         fileName: item.fileName,
         mimeType: mime,
         base64Data: base64
       });
+      console.log(`[Upload] Response for ${item.fileName}:`, res);
 
       if (res.success) {
         item.fileId = res.fileId || '';
         item.link = res.link || '';
         item.uploaded = true;
       } else {
+        item.uploadError = res.error || 'Unknown error';
         hint.textContent = `Error uploading ${item.fileName}: ${res.error}`;
       }
       item.uploading = false;
       renderModels();
+    }
+
+    const failed = included.filter(m => m.uploadError && !m.uploaded);
+    if (failed.length > 0) {
+      hint.textContent = `Warning: ${failed.length} model(s) failed to upload. Check console for details.`;
+      console.error('Failed uploads:', failed.map(m => `${m.fileName}: ${m.uploadError}`));
     }
 
     hint.textContent = 'Saving catalog JSON to Doc...';
@@ -1307,7 +1333,8 @@ async function uploadModelsToGoogle() {
     await callAppsScript({ action: 'saveCatalog', config: catalogJson });
 
     fill.style.width = '100%';
-    hint.textContent = `Done \u2014 ${included.length} model(s) uploaded, catalog saved.`;
+    const successCount = included.filter(m => m.uploaded).length;
+    hint.textContent = `Done \u2014 ${successCount}/${included.length} model(s) uploaded, catalog saved.`;
     document.getElementById('exportArea').value = JSON.stringify(catalogJson, null, 2);
     document.getElementById('export-body').classList.remove('hidden');
     showToast('Models uploaded to Google');
@@ -1356,6 +1383,7 @@ async function loadCatalogFromGoogle() {
           included: true,
           uploading: false,
           uploaded: true,
+          uploadError: '',
           fileId: child.driveFileId || '',
           link: child.driveDownloadUrl || ''
         });
