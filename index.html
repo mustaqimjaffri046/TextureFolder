@@ -1308,7 +1308,7 @@ async function uploadModelsToGoogle() {
         mimeType: mime,
         base64Data: base64
       });
-      console.log(`[Upload] Response for ${item.fileName}:`, res);
+      console.log(`[Upload] Response for ${item.fileName}:`, JSON.stringify(res));
 
       if (res.success) {
         item.fileId = res.fileId || '';
