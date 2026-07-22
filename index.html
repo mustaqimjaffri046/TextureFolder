@@ -1308,14 +1308,17 @@ async function uploadModelsToGoogle() {
         mimeType: mime,
         base64Data: base64
       });
+	console.log(res);
       console.log(`[Upload] Response for ${item.fileName}:`, JSON.stringify(res));
 
       if (res.success) {
         item.fileId = res.fileId || '';
         item.link = res.link || '';
+	console.log("Saved into model1:", item);
         item.uploaded = true;
       } else {
         item.uploadError = res.error || 'Unknown error';
+	console.log("Saved into model2:", item);
         hint.textContent = `Error uploading ${item.fileName}: ${res.error}`;
       }
       item.uploading = false;
@@ -1329,6 +1332,13 @@ async function uploadModelsToGoogle() {
     }
 
     hint.textContent = 'Saving catalog JSON to Doc...';
+	console.log("Models before catalog:");
+console.table(state.models.map(m => ({
+    name: m.name,
+    uploaded: m.uploaded,
+    fileId: m.fileId,
+    link: m.link
+})));
     const catalogJson = buildCatalogJson();
     await callAppsScript({ action: 'saveCatalog', config: catalogJson });
 
