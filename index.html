@@ -454,6 +454,64 @@
     border-color: var(--accent);
   }
 
+  .model-icon-upload {
+    width: 36px;
+    height: 36px;
+    border-radius: 3px;
+    overflow: hidden;
+    cursor: pointer;
+    flex-shrink: 0;
+    position: relative;
+    border: 1px solid var(--border);
+    background: var(--header-bg);
+  }
+
+  .model-icon-upload img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .model-icon-upload .placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #888;
+  }
+
+  .model-icon-upload input {
+    display: none;
+  }
+
+  .model-fields {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .model-fields input[type="text"] {
+    padding: 3px 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 3px;
+    font-size: 11px;
+  }
+
+  .model-fields input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .model-fields label {
+    font-size: 10px;
+    color: #888;
+  }
+
   .progress-bar {
     width: 100%;
     height: 6px;
@@ -1123,7 +1181,14 @@ function handleModelFiles(fileList) {
       uploaded: false,
       uploadError: '',
       fileId: '',
-      link: ''
+      link: '',
+      iconImage: '',
+      nodeId: '',
+      displayLabel: file.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' '),
+      price: '',
+      company: '',
+      size: '',
+      shortDescription: ''
     });
     added++;
   }
@@ -1171,15 +1236,50 @@ function renderModels() {
       `<option value="${c}" ${c === m.category ? 'selected' : ''}>${c}</option>`
     ).join('');
 
+    const iconPreview = m.iconImage
+      ? `<img src="${m.iconImage}" alt="icon">`
+      : `<span class="placeholder">${icon}</span>`;
+
     return `
     <div class="model-row" style="opacity:${m.included ? 1 : 0.4}">
       <input type="checkbox" ${m.included ? 'checked' : ''}
              onchange="state.models[${i}].included=this.checked; renderModels()"
              style="accent-color:var(--accent);width:16px;height:16px;">
-      <div class="model-icon">${icon}</div>
+      <div class="model-icon-upload" onclick="document.getElementById('iconInput-${i}').click()" title="Click to set icon image">
+        ${iconPreview}
+        <input type="file" id="iconInput-${i}" accept="image/*" onchange="setIconImage(${i}, this)">
+      </div>
       <div class="model-info">
         <div class="model-name" title="${escHtml(m.relativePath || m.fileName)}">${escHtml(m.name)}</div>
         <div class="model-meta">${escHtml(ext)} ${sizeStr} ${statusIcon}</div>
+        <div class="model-fields" style="margin-top:4px;">
+          <label>Node ID:</label>
+          <input type="text" value="${escHtml(m.nodeId)}" placeholder="auto (hash)"
+                 style="width:90px;"
+                 onchange="state.models[${i}].nodeId=this.value">
+          <label>Display Label:</label>
+          <input type="text" value="${escHtml(m.displayLabel)}" placeholder="${escHtml(m.name)}"
+                 style="width:120px;"
+                 onchange="state.models[${i}].displayLabel=this.value">
+        </div>
+        <div class="model-fields" style="margin-top:4px;">
+          <label>Price:</label>
+          <input type="text" value="${escHtml(m.price)}" placeholder=""
+                 style="width:70px;"
+                 onchange="state.models[${i}].price=this.value">
+          <label>Company:</label>
+          <input type="text" value="${escHtml(m.company)}" placeholder=""
+                 style="width:90px;"
+                 onchange="state.models[${i}].company=this.value">
+          <label>Size:</label>
+          <input type="text" value="${escHtml(m.size)}" placeholder=""
+                 style="width:70px;"
+                 onchange="state.models[${i}].size=this.value">
+          <label>Description:</label>
+          <input type="text" value="${escHtml(m.shortDescription)}" placeholder=""
+                 style="width:120px;"
+                 onchange="state.models[${i}].shortDescription=this.value">
+        </div>
       </div>
       <div class="model-category">
         <select onchange="state.models[${i}].category=this.value">${catOptions}</select>
@@ -1199,6 +1299,17 @@ function removeModel(i) { state.models.splice(i, 1); renderModels(); }
 function clearAllModels() { state.models = []; renderModels(); }
 function selectAllModels() { state.models.forEach(m => m.included = true); renderModels(); }
 function deselectAllModels() { state.models.forEach(m => m.included = false); renderModels(); }
+
+function setIconImage(i, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    state.models[i].iconImage = ev.target.result;
+    renderModels();
+  };
+  reader.readAsDataURL(file);
+}
 function autoDetectAll() {
   state.models.forEach(m => m.category = detectCategory(m.fileName));
   renderModels();
@@ -1217,19 +1328,20 @@ function buildCatalogJson() {
   const rootNodes = [];
   for (const [catName, items] of Object.entries(grouped)) {
     const children = items.map(item => ({
-      nodeId: hashId(item.name),
-      displayLabel: item.name.replace(/[_-]/g, ' '),
+      nodeId: item.nodeId || hashId(item.name),
+      displayLabel: item.displayLabel || item.name.replace(/[_-]/g, ' '),
       kind: 1,
       modelPrefabName: item.name,
+      iconImage: item.iconImage || '',
       driveFileId: item.fileId || '',
       driveDownloadUrl: item.link || '',
       resourcesLoadPath: '',
       modelSpawnLocalPositionOffset: { x:0, y:0, z:0 },
       modelSpawnLocalEulerOffset: { x:0, y:0, z:0 },
-      price: '',
-      company: '',
-      size: '',
-      shortDescription: '',
+      price: item.price || '',
+      company: item.company || '',
+      size: item.size || '',
+      shortDescription: item.shortDescription || '',
       children: []
     }));
 
@@ -1395,7 +1507,14 @@ async function loadCatalogFromGoogle() {
           uploaded: true,
           uploadError: '',
           fileId: child.driveFileId || '',
-          link: child.driveDownloadUrl || ''
+          link: child.driveDownloadUrl || '',
+          iconImage: child.iconImage || '',
+          nodeId: child.nodeId || '',
+          displayLabel: child.displayLabel || '',
+          price: child.price || '',
+          company: child.company || '',
+          size: child.size || '',
+          shortDescription: child.shortDescription || ''
         });
       }
     }
