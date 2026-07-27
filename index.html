@@ -527,6 +527,67 @@
     transition: width 0.3s;
     border-radius: 3px;
   }
+
+  .category-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .category-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--input-bg);
+    border-radius: 3px;
+  }
+
+  .category-row:hover {
+    background: var(--row-hover);
+  }
+
+  .category-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    object-fit: cover;
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+    background: var(--header-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .category-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .category-icon .placeholder {
+    font-size: 18px;
+    color: #666;
+  }
+
+  .category-name {
+    flex: 1;
+    padding: 4px 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 3px;
+    font-size: 12px;
+  }
+
+  .category-name:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
 </style>
 </head>
 <body>
@@ -623,7 +684,6 @@
     <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
       <button class="btn btn-sm" id="browseFolderBtn">Browse Folder</button>
       <input type="file" id="modelFolderInput" webkitdirectory directory multiple style="display:none;">
-      <button class="btn btn-sm" onclick="autoDetectAll()">Auto-detect Categories</button>
       <button class="btn btn-sm" onclick="selectAllModels()">Select All</button>
       <button class="btn btn-sm" onclick="deselectAllModels()">Deselect All</button>
       <button class="btn btn-sm btn-danger" onclick="clearAllModels()">Clear All</button>
@@ -640,6 +700,22 @@
       <button class="btn" id="loadModelsBtn" onclick="loadCatalogFromGoogle()">Load Catalog from Google</button>
       <button class="btn" onclick="saveCatalogLocal()">Save Catalog JSON</button>
       <button class="btn" onclick="previewCatalog()">Preview Catalog JSON</button>
+    </div>
+  </div>
+</div>
+
+<!-- Categories Section -->
+<div class="section">
+  <div class="section-header" onclick="toggleSection('categories')">
+    <h2>Categories</h2>
+    <span class="arrow" id="categories-arrow">&#9660;</span>
+  </div>
+  <div class="section-body hidden" id="categories-body">
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <button class="btn btn-sm" onclick="addCategory()">+ Add Category</button>
+    </div>
+    <div class="category-list" id="categoryList">
+      <div class="empty-msg">No categories defined.</div>
     </div>
   </div>
 </div>
@@ -671,7 +747,27 @@ const state = {
   textures: [],
   sizes: [],
   isFloor: true,
-  models: []
+  models: [],
+  categories: [
+    { name: 'Sofa', iconLink: '', iconImage: '' },
+    { name: 'Chair', iconLink: '', iconImage: '' },
+    { name: 'Table', iconLink: '', iconImage: '' },
+    { name: 'Bed', iconLink: '', iconImage: '' },
+    { name: 'Lamp', iconLink: '', iconImage: '' },
+    { name: 'Cabinet', iconLink: '', iconImage: '' },
+    { name: 'Shelf', iconLink: '', iconImage: '' },
+    { name: 'Desk', iconLink: '', iconImage: '' },
+    { name: 'Ottoman', iconLink: '', iconImage: '' },
+    { name: 'Bench', iconLink: '', iconImage: '' },
+    { name: 'Mirror', iconLink: '', iconImage: '' },
+    { name: 'Rug', iconLink: '', iconImage: '' },
+    { name: 'Ceiling', iconLink: '', iconImage: '' },
+    { name: 'Wall', iconLink: '', iconImage: '' },
+    { name: 'Floor', iconLink: '', iconImage: '' },
+    { name: 'Door', iconLink: '', iconImage: '' },
+    { name: 'Window', iconLink: '', iconImage: '' },
+    { name: 'Other', iconLink: '', iconImage: '' }
+  ]
 };
 
 const CATEGORIES = [
@@ -718,11 +814,6 @@ async function callAppsScript(payload) {
     body: JSON.stringify(payload),
     redirect: 'follow'
   });
-
-  if (!res.ok) {
-    const errText = await res.text().catch(() => '');
-    throw new Error(`HTTP ${res.status}: ${errText || res.statusText}`);
-  }
 
   const text = await res.text();
   if (!text) return { success: true, message: 'Empty response from server' };
@@ -1232,7 +1323,7 @@ function renderModels() {
     const icon = m.fileName.endsWith('.prefab') ? '&#9881;' : '&#9635;';
     const sizeStr = m.file ? formatModelSize(m.file.size) : '';
     const statusIcon = m.uploaded ? '&#10003;' : m.uploading ? '&#8987;' : '';
-    const catOptions = CATEGORIES.map(c =>
+    const catOptions = getCategoryNames().map(c =>
       `<option value="${c}" ${c === m.category ? 'selected' : ''}>${c}</option>`
     ).join('');
 
@@ -1316,6 +1407,72 @@ function autoDetectAll() {
   showToast('Categories re-detected');
 }
 
+// ─── Categories ──────────────────────────────────
+function getCategoryNames() {
+  return state.categories.map(c => c.name);
+}
+
+function addCategory() {
+  const name = prompt('Enter new category name:');
+  if (!name || !name.trim()) return;
+  const trimmed = name.trim();
+  if (state.categories.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) {
+    showToast('Category already exists');
+    return;
+  }
+  state.categories.push({ name: trimmed, iconLink: '', iconImage: '' });
+  renderCategories();
+  showToast(`Category "${trimmed}" added`);
+}
+
+function removeCategory(i) {
+  state.categories.splice(i, 1);
+  renderCategories();
+}
+
+function renameCategory(i, newName) {
+  if (!newName || !newName.trim()) return;
+  const oldName = state.categories[i].name;
+  state.categories[i].name = newName.trim();
+  state.models.forEach(m => { if (m.category === oldName) m.category = newName.trim(); });
+  renderCategories();
+  renderModels();
+}
+
+function setCategoryIcon(i, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    state.categories[i].iconImage = ev.target.result;
+    renderCategories();
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderCategories() {
+  const list = document.getElementById('categoryList');
+  if (state.categories.length === 0) {
+    list.innerHTML = '<div class="empty-msg">No categories defined.</div>';
+    return;
+  }
+  list.innerHTML = state.categories.map((cat, i) => {
+    const iconHtml = cat.iconImage
+      ? `<img src="${cat.iconImage}" alt="${escHtml(cat.name)}">`
+      : `<span class="placeholder">&#9635;</span>`;
+    return `
+    <div class="category-row">
+      <div class="category-icon" onclick="document.getElementById('catIconInput-${i}').click()" title="Click to set icon">
+        ${iconHtml}
+        <input type="file" id="catIconInput-${i}" accept="image/*" onchange="setCategoryIcon(${i}, this)" style="display:none;">
+      </div>
+      <input class="category-name" value="${escHtml(cat.name)}"
+             onchange="renameCategory(${i}, this.value)">
+      <button class="btn btn-sm btn-danger" onclick="removeCategory(${i})">X</button>
+    </div>`;
+  }).join('');
+}
+
 function buildCatalogJson() {
   const grouped = {};
   for (const item of state.models) {
@@ -1332,7 +1489,7 @@ function buildCatalogJson() {
       displayLabel: item.displayLabel || item.name.replace(/[_-]/g, ' '),
       kind: 1,
       modelPrefabName: item.name,
-      iconImage: item.iconImage || '',
+      iconImage: item.iconLink || item.iconImage || '',
       driveFileId: item.fileId || '',
       driveDownloadUrl: item.link || '',
       resourcesLoadPath: '',
@@ -1350,6 +1507,7 @@ function buildCatalogJson() {
       displayLabel: catName,
       panelTitle: catName,
       kind: 0,
+      iconImage: (state.categories.find(c => c.name === catName) || {}).iconLink || '',
       children: children
     });
   }
@@ -1390,19 +1548,14 @@ async function uploadModelsToGoogle() {
       item.uploadError = '';
       renderModels();
 
-      console.log(`[Upload] Model: ${item.fileName}, file object:`, item.file, `file type:`, typeof item.file, `file instanceof File:`, item.file instanceof File);
-
       if (!item.file) {
         hint.textContent = `Skipping ${item.fileName} — no local file. Add the file first.`;
-        console.error(`[Upload] SKIPPED: ${item.fileName} has no file object. state.models:`, state.models);
         item.uploading = false;
         renderModels();
         continue;
       }
 
-      console.log(`[Upload] Reading file: ${item.fileName}, size: ${item.file.size} bytes`);
       const base64 = await fileToBase64(item.file);
-      console.log(`[Upload] Base64 length: ${base64 ? base64.length : 'null'}`);
       const ext = item.fileName.split('.').pop().toLowerCase();
       const mimeMap = {
         'fbx': 'application/octet-stream', 'obj': 'application/octet-stream',
@@ -1413,26 +1566,37 @@ async function uploadModelsToGoogle() {
       };
       const mime = mimeMap[ext] || 'application/octet-stream';
 
-      console.log(`[Upload] Calling Apps Script for: ${item.fileName}`);
       const res = await callAppsScript({
         action: 'uploadModel',
         fileName: item.fileName,
         mimeType: mime,
         base64Data: base64
       });
-	console.log(res);
-      console.log(`[Upload] Response for ${item.fileName}:`, JSON.stringify(res));
 
       if (res.success) {
         item.fileId = res.fileId || '';
         item.link = res.link || '';
-	console.log("Saved into model1:", item);
-        item.uploaded = true;
+	item.uploaded = true;
       } else {
         item.uploadError = res.error || 'Unknown error';
-	console.log("Saved into model2:", item);
         hint.textContent = `Error uploading ${item.fileName}: ${res.error}`;
       }
+
+      if (item.uploaded && item.iconImage && item.iconImage.startsWith('data:')) {
+        hint.textContent = `Uploading icon for ${item.fileName}...`;
+        const iconBase64 = item.iconImage.split(',')[1];
+        const iconMime = item.iconImage.split(';')[0].split(':')[1] || 'image/png';
+        const iconRes = await callAppsScript({
+          action: 'uploadTexture',
+          fileName: item.name + '_icon.png',
+          mimeType: iconMime,
+          base64Data: iconBase64
+        });
+        if (iconRes.success) {
+          item.iconLink = iconRes.link || '';
+        }
+      }
+
       item.uploading = false;
       renderModels();
     }
@@ -1443,14 +1607,24 @@ async function uploadModelsToGoogle() {
       console.error('Failed uploads:', failed.map(m => `${m.fileName}: ${m.uploadError}`));
     }
 
+    hint.textContent = 'Uploading category icons...';
+    for (const cat of state.categories) {
+      if (cat.iconImage && cat.iconImage.startsWith('data:') && !cat.iconLink) {
+        const iconBase64 = cat.iconImage.split(',')[1];
+        const iconMime = cat.iconImage.split(';')[0].split(':')[1] || 'image/png';
+        const iconRes = await callAppsScript({
+          action: 'uploadTexture',
+          fileName: 'cat_' + cat.name.replace(/[<>:"/\\|?*]/g, '_') + '.png',
+          mimeType: iconMime,
+          base64Data: iconBase64
+        });
+        if (iconRes.success) {
+          cat.iconLink = iconRes.link || '';
+        }
+      }
+    }
+
     hint.textContent = 'Saving catalog JSON to Doc...';
-	console.log("Models before catalog:");
-console.table(state.models.map(m => ({
-    name: m.name,
-    uploaded: m.uploaded,
-    fileId: m.fileId,
-    link: m.link
-})));
     const catalogJson = buildCatalogJson();
     await callAppsScript({ action: 'saveCatalog', config: catalogJson });
 
@@ -1494,8 +1668,16 @@ async function loadCatalogFromGoogle() {
 
     const config = res.config;
     state.models = [];
+
+    const loadedCats = {};
     for (const node of (config.rootNodes || [])) {
-      if (node.kind !== 0 || !node.children) continue;
+      if (node.kind !== 0) {
+        if (node.iconImage) {
+          loadedCats[node.displayLabel] = node.iconImage;
+        }
+        continue;
+      }
+      if (!node.children) continue;
       for (const child of node.children) {
         state.models.push({
           name: child.displayLabel || child.modelPrefabName || 'Unknown',
@@ -1519,7 +1701,17 @@ async function loadCatalogFromGoogle() {
       }
     }
 
+    for (const [catName, iconLink] of Object.entries(loadedCats)) {
+      const existing = state.categories.find(c => c.name === catName);
+      if (existing) {
+        existing.iconLink = iconLink;
+      } else {
+        state.categories.push({ name: catName, iconLink: iconLink, iconImage: '' });
+      }
+    }
+
     renderModels();
+    renderCategories();
     hint.textContent = `Loaded ${state.models.length} model(s) from Google.`;
     document.getElementById('exportArea').value = JSON.stringify(config, null, 2);
     document.getElementById('export-body').classList.remove('hidden');
@@ -1561,6 +1753,7 @@ function escHtml(s) {
 renderTextures();
 renderSizes();
 renderMatrix();
+renderCategories();
 </script>
 </body>
 </html>

@@ -50,9 +50,33 @@ function writeDocConfig(obj) {
 // ─── Texture actions (backward-compatible) ───────
 function handleSaveTextures(data) {
   var config = readDocConfig();
-  config.textures = data.config;
+  var existing = config.textures || {};
+
+  var newTextures = data.config.textures || [];
+  var newSizes = data.config.sizes || [];
+
+  var oldTextures = existing.textures || [];
+  var oldSizes = existing.sizes || [];
+
+  var mergedTextures = mergeByKey(oldTextures, newTextures, function(a, b) {
+    return (a.fileName || a.name) === (b.fileName || b.name);
+  });
+
+  var mergedSizes = mergeByKey(oldSizes, newSizes, function(a, b) {
+    return a.sizeName === b.sizeName &&
+           JSON.stringify(a.tiling) === JSON.stringify(b.tiling);
+  });
+
+  config.textures = {
+    exportDate: data.config.exportDate || existing.exportDate,
+    version: data.config.version || existing.version || 1,
+    isFloor: data.config.isFloor !== undefined ? data.config.isFloor : (existing.isFloor !== undefined ? existing.isFloor : true),
+    textures: mergedTextures,
+    sizes: mergedSizes
+  };
+
   writeDocConfig(config);
-  return jsonResponse({ success: true, message: 'Textures saved to Doc' });
+  return jsonResponse({ success: true, message: 'Textures saved to Doc (merged)' });
 }
 
 function handleLoadTextures() {
@@ -66,9 +90,22 @@ function handleLoadTextures() {
 // ─── Catalog actions ─────────────────────────────
 function handleSaveCatalog(data) {
   var config = readDocConfig();
-  config.catalog = data.config;
+  var existing = config.catalog || {};
+
+  var newRootNodes = data.config.rootNodes || [];
+  var oldRootNodes = existing.rootNodes || [];
+
+  var mergedRootNodes = mergeCatalogNodes(oldRootNodes, newRootNodes);
+
+  config.catalog = {
+    exportDate: data.config.exportDate || existing.exportDate,
+    version: data.config.version || existing.version || 1,
+    rootPanelTitle: data.config.rootPanelTitle || existing.rootPanelTitle || 'Furniture',
+    rootNodes: mergedRootNodes
+  };
+
   writeDocConfig(config);
-  return jsonResponse({ success: true, message: 'Catalog saved to Doc' });
+  return jsonResponse({ success: true, message: 'Catalog saved to Doc (merged)' });
 }
 
 function handleLoadCatalog() {
@@ -166,4 +203,52 @@ function testDriveAccess() {
 function jsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ─── Merge helpers ───────────────────────────────
+function mergeByKey(oldArr, newArr, matchFn) {
+  var result = oldArr.slice();
+  for (var i = 0; i < newArr.length; i++) {
+    var newItem = newArr[i];
+    var found = false;
+    for (var j = 0; j < result.length; j++) {
+      if (matchFn(result[j], newItem)) {
+        result[j] = newItem;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      result.push(newItem);
+    }
+  }
+  return result;
+}
+
+function mergeCatalogNodes(oldNodes, newNodes) {
+  var result = oldNodes.slice();
+  for (var i = 0; i < newNodes.length; i++) {
+    var newNode = newNodes[i];
+    var foundIdx = -1;
+    for (var j = 0; j < result.length; j++) {
+      if (result[j].nodeId === newNode.nodeId) {
+        foundIdx = j;
+        break;
+      }
+    }
+    if (foundIdx >= 0) {
+      var merged = Object.assign({}, result[foundIdx], newNode);
+      if (newNode.children && newNode.children.length > 0) {
+        merged.children = mergeByKey(
+          result[foundIdx].children || [],
+          newNode.children,
+          function(a, b) { return a.nodeId === b.nodeId; }
+        );
+      }
+      result[foundIdx] = merged;
+    } else {
+      result.push(newNode);
+    }
+  }
+  return result;
 }
