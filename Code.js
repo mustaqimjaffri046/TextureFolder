@@ -1,12 +1,10 @@
 // ─── Google Apps Script Backend ─────────────────────────
 // Deploy this as a Web App (Execute as: Me, Who has access: Anyone).
 // Handles: texture uploads, model uploads, catalog hierarchy JSON.
-// All stored in the same Drive folder, config in the same Doc.
+// Files stored in Cloudflare R2, config in the same Doc.
 // ─────────────────────────────────────────────────────────
 
-const DRIVE_FOLDER_ID = '1hXJn3iztH2h7ut0S4rqxGCT2xp4RO6ES';
 const DOC_ID = '1a_LBsFKrQ85H4vBpGaediOrMXNnKGH6be6bpE7sfqXE';
-const MODELS_SUBFOLDER = 'CatalogModels';
 
 function doGet(e) {
   return ContentService.createTextOutput(JSON.stringify({ status: 'ok' }))
@@ -116,7 +114,7 @@ function handleLoadCatalog() {
   return jsonResponse({ success: true, config: config.catalog });
 }
 
-// ─── Upload texture to Drive folder ──────────────
+// ─── Upload texture to Cloudflare R2 ─────────────
 function handleUploadTexture(data) {
   var fileName = data.fileName;
   var mimeType = data.mimeType || 'image/png';
@@ -126,27 +124,21 @@ function handleUploadTexture(data) {
     return jsonResponse({ error: 'Missing fileName or base64Data' });
   }
 
-  var folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
-  var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, fileName);
+  var result = uploadToR2(base64Data, fileName, mimeType);
 
-  var existing = folder.getFilesByName(fileName);
-  var file;
-  if (existing.hasNext()) {
-    file = existing.next();
-    file.setTrashed(true);
+  if (result.success) {
+    return jsonResponse({
+      success: true,
+      r2Key: result.r2Key,
+      r2Url: result.r2Url,
+      fileName: fileName
+    });
+  } else {
+    return jsonResponse({ error: result.error });
   }
-
-  file = folder.createFile(blob);
-
-  return jsonResponse({
-    success: true,
-    fileId: file.getId(),
-    fileName: fileName,
-    link: 'https://drive.google.com/uc?id=' + file.getId()
-  });
 }
 
-// ─── Upload model to Drive subfolder ─────────────
+// ─── Upload model to Cloudflare R2 ───────────────
 function handleUploadModel(data) {
   var fileName = data.fileName;
   var mimeType = data.mimeType || 'application/octet-stream';
@@ -156,48 +148,18 @@ function handleUploadModel(data) {
     return jsonResponse({ error: 'Missing fileName or base64Data' });
   }
 
-  var parent = DriveApp.getFolderById(DRIVE_FOLDER_ID);
-  var folders = parent.getFoldersByName(MODELS_SUBFOLDER);
-  var folder = folders.hasNext() ? folders.next() : parent.createFolder(MODELS_SUBFOLDER);
+  var result = uploadToR2(base64Data, fileName, mimeType);
 
-  var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, fileName);
-
-  var existing = folder.getFilesByName(fileName);
-  while (existing.hasNext()) {
-    existing.next().setTrashed(true);
-  }
-
-  var file = folder.createFile(blob);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
-  return jsonResponse({
-    success: true,
-    fileId: file.getId(),
-    fileName: fileName,
-    link: 'https://drive.google.com/uc?id=' + file.getId() + '&export=download'
-  });
-}
-
-function testDriveAccess() {
-  var folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
-  Logger.log('Main folder: ' + folder.getName() + ' (ID: ' + folder.getId() + ')');
-
-  var folders = folder.getFoldersByName(MODELS_SUBFOLDER);
-  if (folders.hasNext()) {
-    var sub = folders.next();
-    Logger.log('CatalogModels subfolder exists (ID: ' + sub.getId() + ')');
-    var files = sub.getFiles();
-    var count = 0;
-    while (files.hasNext()) { files.next(); count++; }
-    Logger.log('CatalogModels has ' + count + ' file(s)');
+  if (result.success) {
+    return jsonResponse({
+      success: true,
+      r2Key: result.r2Key,
+      r2Url: result.r2Url,
+      fileName: fileName
+    });
   } else {
-    Logger.log('CatalogModels subfolder does NOT exist (will be created on first upload)');
+    return jsonResponse({ error: result.error });
   }
-
-  var texFiles = folder.getFiles();
-  var texCount = 0;
-  while (texFiles.hasNext()) { texFiles.next(); texCount++; }
-  Logger.log('Main Textures folder has ' + texCount + ' file(s)');
 }
 
 function jsonResponse(obj) {

@@ -1068,7 +1068,7 @@ async function saveToGoogle() {
       hint.textContent = `Uploading ${i + 1}/${state.textures.length}: ${tex.fileName}`;
 
       if (!tex.dataUrl) {
-        uploaded.push({ name: tex.name, fileName: tex.name, fileId: '', link: '' });
+        uploaded.push({ name: tex.name, fileName: tex.name, r2Key: '', r2Url: '' });
         continue;
       }
 
@@ -1087,8 +1087,8 @@ async function saveToGoogle() {
       uploaded.push({
         name: tex.name,
         fileName: safeName,
-        fileId: res.fileId || '',
-        link: res.link || ''
+        r2Key: res.r2Key || '',
+        r2Url: res.r2Url || ''
       });
     }
 
@@ -1147,7 +1147,7 @@ async function loadFromGoogle() {
     state.textures = (config.textures || []).map(t => ({
       name: t.name || 'Unnamed',
       fileName: t.fileName || 'unknown',
-      dataUrl: t.link ? t.link : ''
+      dataUrl: t.r2Url || t.link || ''
     }));
 
     state.sizes = (config.sizes || []).map(s => ({
@@ -1271,8 +1271,8 @@ function handleModelFiles(fileList) {
       uploading: false,
       uploaded: false,
       uploadError: '',
-      fileId: '',
-      link: '',
+      r2Key: '',
+      r2Url: '',
       iconImage: '',
       nodeId: '',
       displayLabel: file.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' '),
@@ -1490,8 +1490,8 @@ function buildCatalogJson() {
       kind: 1,
       modelPrefabName: item.name,
       iconImage: item.iconLink || item.iconImage || '',
-      driveFileId: item.fileId || '',
-      driveDownloadUrl: item.link || '',
+      r2Key: item.r2Key || '',
+      r2Url: item.r2Url || '',
       resourcesLoadPath: '',
       modelSpawnLocalPositionOffset: { x:0, y:0, z:0 },
       modelSpawnLocalEulerOffset: { x:0, y:0, z:0 },
@@ -1574,8 +1574,8 @@ async function uploadModelsToGoogle() {
       });
 
       if (res.success) {
-        item.fileId = res.fileId || '';
-        item.link = res.link || '';
+        item.r2Key = res.r2Key || '';
+        item.r2Url = res.r2Url || '';
 	item.uploaded = true;
       } else {
         item.uploadError = res.error || 'Unknown error';
@@ -1593,7 +1593,7 @@ async function uploadModelsToGoogle() {
           base64Data: iconBase64
         });
         if (iconRes.success) {
-          item.iconLink = iconRes.link || '';
+          item.iconLink = iconRes.r2Url || '';
         }
       }
 
@@ -1619,7 +1619,7 @@ async function uploadModelsToGoogle() {
           base64Data: iconBase64
         });
         if (iconRes.success) {
-          cat.iconLink = iconRes.link || '';
+          cat.iconLink = iconRes.r2Url || '';
         }
       }
     }
@@ -1688,8 +1688,8 @@ async function loadCatalogFromGoogle() {
           uploading: false,
           uploaded: true,
           uploadError: '',
-          fileId: child.driveFileId || '',
-          link: child.driveDownloadUrl || '',
+          r2Key: child.r2Key || child.driveFileId || '',
+          r2Url: child.r2Url || child.driveDownloadUrl || '',
           iconImage: child.iconImage || '',
           nodeId: child.nodeId || '',
           displayLabel: child.displayLabel || '',
