@@ -782,12 +782,9 @@ const MODEL_EXT = {
 };
 
 function getScriptUrl() {
-  const stored = localStorage.getItem('apps_script_url') || '';
-  const url = stored.includes('script.googleusercontent.com/macros/echo') ? 
-    'https://script.google.com/macros/s/AKfycbxCEJ8yArhTEQyJzaKuarxzRYno6BJGuLxaJVKJGCpIxbzy9YPgEUgqxL_zvZqlyGbfwg/exec' : 
-    stored;
-  console.log('Script URL:', url.substring(0, 50) + '...');
-  return url;
+
+    return "https://script.google.com/macros/s/AKfycbxCEJ8yArhTEQyJzaKuarxzRYno6BJGuLxaJVKJGCpIxbzy9YPgEUgqxL_zvZqlyGbfwg/exec";
+
 }
 
 document.getElementById('isFloor').addEventListener('change', e => {
