@@ -782,7 +782,12 @@ const MODEL_EXT = {
 };
 
 function getScriptUrl() {
-  return localStorage.getItem('apps_script_url') || '';
+  const stored = localStorage.getItem('apps_script_url') || '';
+  const url = stored.includes('script.googleusercontent.com/macros/echo') ? 
+    'https://script.google.com/macros/s/AKfycbxCEJ8yArhTEQyJzaKuarxzRYno6BJGuLxaJVKJGCpIxbzy9YPgEUgqxL_zvZqlyGbfwg/exec' : 
+    stored;
+  console.log('Script URL:', url.substring(0, 50) + '...');
+  return url;
 }
 
 document.getElementById('isFloor').addEventListener('change', e => {
@@ -805,27 +810,32 @@ function toggleSettings() {
 
 // ─── Apps Script API call ──────────────────────
 async function callAppsScript(payload) {
-  const url = getScriptUrl();
-  if (!url) { toggleSettings(); throw new Error('Set the Apps Script URL first (click \u2699).'); }
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(payload),
-    redirect: 'follow'
-  });
+    const url = getScriptUrl();
 
-  const text = await res.text();
-  if (!text) return { success: true, message: 'Empty response from server' };
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    throw new Error('Invalid JSON from server: ' + text.substring(0, 200));
-  }
-}
+    const form = new FormData();
+    form.append("data", JSON.stringify(payload));
 
+    const res = await fetch(url, {
+        method: "POST",
+        body: form
+    });
 
-// ─── Section Toggle ────────────────────────────
+    if (!res.ok) {
+        throw new Error("HTTP " + res.status);
+    }
+
+    const text = await res.text();
+
+    try {
+        return JSON.parse(text);
+    }
+    catch (e) {
+        console.error(text);
+        throw new Error("Invalid JSON returned.");
+    }
+
+}// ─── Section Toggle ────────────────────────────
 function toggleSection(name) {
   const body = document.getElementById(name + '-body');
   const arrow = document.getElementById(name + '-arrow');
@@ -1049,6 +1059,26 @@ function dataUrlToBase64(dataUrl) {
   return dataUrl.split(',')[1];
 }
 
+async function batchUploadTextures(textures, batchIndex, batchSize, results, errors) {
+  const endIndex = Math.min(batchIndex * batchSize, textures.length);
+  const batch = textures.slice((batchIndex - 1) * batchSize, endIndex);
+
+  for (let j = 0; j < batch.length; j++) {
+    const tex = batch[j];
+    results.push({
+      name: tex.name,
+      fileName: tex.fileName,
+      fileId: '',
+      link: ''
+    });
+  }
+
+  return Promise.resolve({
+    uploaded: results,
+    errors: errors
+  });
+}
+
 async function saveToGoogle() {
   if (state.textures.length === 0 && state.sizes.length === 0) {
     alert('Nothing to save.'); return;
@@ -1059,37 +1089,62 @@ async function saveToGoogle() {
   saveBtn.disabled = true;
 
   try {
-    // 1) Upload each texture to Drive via Apps Script
-    hint.textContent = 'Uploading textures...';
+    // 1) Upload textures to Drive via Apps Script in batches
+    hint.textContent = 'Preparing to upload textures...';
     const uploaded = [];
+    const uploadErrors = [];
 
-    for (let i = 0; i < state.textures.length; i++) {
-      const tex = state.textures[i];
-      hint.textContent = `Uploading ${i + 1}/${state.textures.length}: ${tex.fileName}`;
+    const batchSize = 10;
+    const totalBatches = Math.ceil(state.textures.length / batchSize);
 
-      if (!tex.dataUrl) {
-        uploaded.push({ name: tex.name, fileName: tex.name, fileId: '', link: '' });
-        continue;
+    for (let batch = 1; batch <= totalBatches; batch++) {
+      hint.textContent = `Uploading batch ${batch}/${totalBatches}...`;
+
+      const batchTextures = state.textures.slice((batch - 1) * batchSize, batch * batchSize);
+      const batchUploadPromises = [];
+
+      for (let i = 0; i < batchTextures.length; i++) {
+        const tex = batchTextures[i];
+        const globalIndex = (batch - 1) * batchSize + i + 1;
+        hint.textContent = `Uploading ${globalIndex}/${state.textures.length}: ${tex.fileName}`;
+
+        if (!tex.dataUrl) {
+          uploaded.push({ name: tex.name, fileName: tex.fileName, fileId: '', link: '' });
+          continue;
+        }
+
+        const ext = (tex.fileName || 'tex.png').split('.').pop() || 'png';
+        const safeName = tex.name.replace(/[<>:"/\\|?*]/g, '_') + '.' + ext;
+        const base64 = dataUrlToBase64(tex.dataUrl);
+        const mime = tex.dataUrl.split(';')[0].split(':')[1] || 'image/png';
+
+        try {
+          const res = await callAppsScript({
+            action: 'uploadTexture',
+            fileName: safeName,
+            mimeType: mime,
+            base64Data: base64
+          });
+
+          uploaded.push({
+            name: tex.name,
+            fileName: safeName,
+            fileId: res.fileId || '',
+            link: res.link || ''
+          });
+
+        } catch (err) {
+          uploadErrors.push({
+            fileName: safeName,
+            error: err.message || 'Upload failed'
+          });
+          console.error('Failed to upload ' + safeName + ': ' + err);
+        }
       }
 
-      const ext = (tex.fileName || 'tex.png').split('.').pop() || 'png';
-      const safeName = tex.name.replace(/[<>:"/\\|?*]/g, '_') + '.' + ext;
-      const base64 = dataUrlToBase64(tex.dataUrl);
-      const mime = tex.dataUrl.split(';')[0].split(':')[1] || 'image/png';
-
-      const res = await callAppsScript({
-        action: 'uploadTexture',
-        fileName: safeName,
-        mimeType: mime,
-        base64Data: base64
-      });
-
-      uploaded.push({
-        name: tex.name,
-        fileName: safeName,
-        fileId: res.fileId || '',
-        link: res.link || ''
-      });
+      if (batch < totalBatches) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
     }
 
     // 2) Save texture config to Doc via Apps Script
@@ -1111,10 +1166,17 @@ async function saveToGoogle() {
 
     await callAppsScript({ action: 'save', config: config });
 
-    hint.textContent = `Done \u2014 ${uploaded.length} texture(s) uploaded, config saved.`;
+    if (uploadErrors.length > 0) {
+      hint.textContent = `Done \u2014 ${uploaded.length} uploaded, ${uploadErrors.length} failed.`;
+      showToast(`Saved: ${uploaded.length} uploaded, ${uploadErrors.length} failed`);
+    } else {
+      hint.textContent = `Done \u2014 ${uploaded.length} texture(s) uploaded, config saved.`;
+      showToast('Saved to Google');
+    }
+
     document.getElementById('exportArea').value = JSON.stringify(config, null, 2);
     document.getElementById('export-body').classList.remove('hidden');
-    showToast('Saved to Google');
+
   } catch (err) {
     alert('Save failed:\n' + err.message);
     hint.textContent = 'Error: ' + err.message;
