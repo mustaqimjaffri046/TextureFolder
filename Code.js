@@ -21,6 +21,7 @@ function doPost(e) {
     if (action === 'save')              return handleSaveTextures(data);
     if (action === 'load')              return handleLoadTextures();
     if (action === 'uploadTexture')     return handleUploadTexture(data);
+    if (action === 'uploadTextures')    return handleUploadTextures(data);
     if (action === 'saveCatalog')       return handleSaveCatalog(data);
     if (action === 'loadCatalog')       return handleLoadCatalog();
     if (action === 'uploadModel')       return handleUploadModel(data);
@@ -117,6 +118,70 @@ function handleLoadCatalog() {
 }
 
 // ─── Upload texture to Drive folder ──────────────
+// ─── Upload textures to Drive folder ──────────────
+function handleUploadTextures(data) {
+  var textures = data.textures;
+  var results = [];
+  var errors = [];
+
+  if (!Array.isArray(textures)) {
+    return jsonResponse({ error: 'Expected textures array' });
+  }
+
+  var folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+
+  for (var i = 0; i < textures.length; i++) {
+    var item = textures[i];
+    var fileName = item.fileName;
+    var mimeType = item.mimeType || 'image/png';
+    var base64Data = item.base64Data;
+
+    if (!fileName || !base64Data) {
+      errors.push({ fileName: fileName || 'unknown', error: 'Missing fileName or base64Data' });
+      continue;
+    }
+
+    try {
+      var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, fileName);
+
+      var existing = folder.getFilesByName(fileName);
+      var file;
+      if (existing.hasNext()) {
+        file = existing.next();
+        file.setTrashed(true);
+      }
+
+      file = folder.createFile(blob);
+
+      results.push({
+        success: true,
+        fileId: file.getId(),
+        fileName: fileName,
+        link: 'https://drive.google.com/uc?id=' + file.getId()
+      });
+
+      Logger.log('Uploaded: ' + fileName + ' (' + (i + 1) + '/' + textures.length + ')');
+
+    } catch (e) {
+      Logger.log('Failed to upload ' + fileName + ': ' + e.toString());
+      errors.push({ fileName: fileName, error: e.toString() });
+    }
+  }
+
+  var response = {
+    success: results.length > 0,
+    uploaded: results,
+    errors: errors
+  };
+
+  if (results.length > 0) {
+    Logger.log('Batch upload complete: ' + results.length + ' uploaded, ' + errors.length + ' failed');
+  }
+
+  return jsonResponse(response);
+}
+
+// ─── Upload single texture (legacy for backward compatibility) ──────
 function handleUploadTexture(data) {
   var fileName = data.fileName;
   var mimeType = data.mimeType || 'image/png';
@@ -126,24 +191,7 @@ function handleUploadTexture(data) {
     return jsonResponse({ error: 'Missing fileName or base64Data' });
   }
 
-  var folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
-  var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, fileName);
-
-  var existing = folder.getFilesByName(fileName);
-  var file;
-  if (existing.hasNext()) {
-    file = existing.next();
-    file.setTrashed(true);
-  }
-
-  file = folder.createFile(blob);
-
-  return jsonResponse({
-    success: true,
-    fileId: file.getId(),
-    fileName: fileName,
-    link: 'https://drive.google.com/uc?id=' + file.getId()
-  });
+  return handleUploadTextures({ textures: [{ fileName: fileName, mimeType: mimeType, base64Data: base64Data }] });
 }
 
 // ─── Upload model to Drive subfolder ─────────────
